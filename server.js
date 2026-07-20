@@ -18,12 +18,15 @@ if (!WEBHOOK_URL) {
 app.set("trust proxy", 1); // so req.ip is the real visitor IP behind Render/proxies
 
 // ---- de-dupe: don't re-notify for the same IP within this window ----
-const DEDUPE_MS = 60_000;
+// Set to 0 to disable (log every load). Any value > 0 = cooldown in ms.
+const DEDUPE_MS = 0;
 const lastSeen = new Map(); // ip -> timestamp
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, t] of lastSeen) if (now - t > DEDUPE_MS) lastSeen.delete(ip);
-}, 5 * DEDUPE_MS).unref();
+if (DEDUPE_MS > 0) {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, t] of lastSeen) if (now - t > DEDUPE_MS) lastSeen.delete(ip);
+  }, 5 * DEDUPE_MS).unref();
+}
 
 function cleanIp(ip) {
   return (ip || "").replace("::ffff:", "");
@@ -53,9 +56,11 @@ async function notifyVisit(req) {
   if (!WEBHOOK_URL) return;
 
   const ip = cleanIp(req.ip);
-  const now = Date.now();
-  if (lastSeen.get(ip) && now - lastSeen.get(ip) < DEDUPE_MS) return; // recently logged
-  lastSeen.set(ip, now);
+  if (DEDUPE_MS > 0) {
+    const now = Date.now();
+    if (lastSeen.get(ip) && now - lastSeen.get(ip) < DEDUPE_MS) return; // recently logged
+    lastSeen.set(ip, now);
+  }
 
   const ua = (req.headers["user-agent"] || "unknown").slice(0, 300);
   const geo = await geoLookup(ip);
