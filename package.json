@@ -1,0 +1,17 @@
+{
+  "name": "webhook-site",
+  "version": "1.0.0",
+  "description": "Public form that relays submissions to a Discord webhook (webhook kept server-side).",
+  "type": "module",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "dev": "node --env-file-if-exists=.env --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

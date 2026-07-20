@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: webhook-site
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: DISCORD_WEBHOOK_URL
+        sync: false # set this in the Render dashboard, not in git
