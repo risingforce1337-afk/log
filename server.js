@@ -15,7 +15,7 @@ if (!WEBHOOK_URL) {
   );
 }
 
-app.set("trust proxy", 1); // so req.ip is the real visitor IP behind Render/proxies
+app.set("trust proxy", true); // behind Render's proxy; getClientIp() parses XFF for the real client
 
 // ---- de-dupe: don't re-notify for the same IP within this window ----
 // Set to 0 to disable (log every load). Any value > 0 = cooldown in ms.
@@ -29,12 +29,33 @@ if (DEDUPE_MS > 0) {
 }
 
 function cleanIp(ip) {
-  return (ip || "").replace("::ffff:", "");
+  return (ip || "").replace("::ffff:", "").trim();
 }
 
+// Private / non-routable ranges — these can't be geolocated and are never the
+// real visitor (they're proxy/LAN addresses like Render's internal 10.x hop).
 function isLocal(ip) {
   const c = cleanIp(ip);
-  return !c || c === "::1" || c.startsWith("127.");
+  if (!c) return true;
+  if (c === "::1" || c.startsWith("127.") || c.startsWith("169.254.")) return true;
+  if (c.startsWith("10.") || c.startsWith("192.168.")) return true;
+  const m = c.match(/^172\.(\d+)\./);
+  if (m && +m[1] >= 16 && +m[1] <= 31) return true;
+  if (/^(fc|fd|fe80)/i.test(c)) return true; // IPv6 ULA / link-local
+  return false;
+}
+
+// The real client IP: walk X-Forwarded-For left→right and take the first PUBLIC
+// address. Falls back to the socket peer. This skips Render's internal proxy hops.
+function getClientIp(req) {
+  const xff = req.headers["x-forwarded-for"];
+  if (xff) {
+    for (const part of xff.split(",")) {
+      const ip = cleanIp(part);
+      if (ip && !isLocal(ip)) return ip;
+    }
+  }
+  return cleanIp(req.ip || req.socket?.remoteAddress || "");
 }
 
 // Approx geolocation from IP via a free, no-key, HTTPS endpoint.
@@ -55,7 +76,7 @@ async function geoLookup(ip) {
 async function notifyVisit(req) {
   if (!WEBHOOK_URL) return;
 
-  const ip = cleanIp(req.ip);
+  const ip = getClientIp(req);
   if (DEDUPE_MS > 0) {
     const now = Date.now();
     if (lastSeen.get(ip) && now - lastSeen.get(ip) < DEDUPE_MS) return; // recently logged
