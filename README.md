@@ -1,32 +1,34 @@
-# Webhook Site
+# Visit Logger Site
 
-Public form → your custom backend → Discord webhook. The webhook URL stays
-**server-side** (in an env var), so it's never exposed to visitors and can't be
-scraped and spammed from the browser.
+An image page that logs each visit — IP address + approximate location — to a
+Discord webhook, **with a visible on-page notice telling visitors it does so.**
+The webhook URL stays **server-side** (env var), never exposed to the browser.
+
+## How it works
+- `GET /` serves `public/index.html` (an image + a disclosure notice) and, in the
+  background, sends a "New visit" embed to Discord with the visitor's IP,
+  approximate location (via the free ipwho.is lookup), and user-agent.
+- Repeat visits from the same IP within 60s are de-duped so refreshes don't spam.
 
 ## Stack
-- Node + Express (single server: serves the page *and* the API)
-- Zero-config frontend (plain HTML/CSS/JS in `public/`)
-- Spam protection: honeypot field + per-IP rate limit (5/min)
+- Node + Express (single server serves the page and does the logging)
+- Only dep is express; uses Node 24 built-in `fetch` + `--env-file-if-exists`
 
 ## Run locally
 ```bash
 npm install
 npm start        # -> http://localhost:3000
 ```
-`.env` already holds your webhook URL for local dev.
+Locally your IP is `::1`, so the embed shows "local / private network". Real
+locations only appear once it's deployed and hit from the public internet.
 
 ## Deploy (Render — free)
 1. Push this folder to a GitHub repo (`.env` and `node_modules` are gitignored).
-2. On https://render.com → **New → Web Service** → pick the repo.
-   `render.yaml` sets build/start commands automatically.
-3. In the service's **Environment** tab, add:
-   `DISCORD_WEBHOOK_URL = <your webhook>`
-4. Deploy. You get a public `https://<name>.onrender.com` URL.
+2. render.com → **New → Web Service** → pick the repo (`render.yaml` auto-fills).
+3. In the service's **Environment** tab add `DISCORD_WEBHOOK_URL = <your webhook>`.
+4. Deploy → public `https://<name>.onrender.com`.
 
-> Free tier sleeps after ~15 min idle; first hit after that takes a few seconds
-> to wake. Fine for a form.
-
-## Customize the fields
-- Edit the form in `public/index.html`.
-- Mirror the field names in the `str(...)` reads + embed in `server.js`.
+## Customize
+- Swap the image: drop a file in `public/` and change the `src` in `index.html`.
+- Keep the notice visible — that on-page disclosure is what keeps this a legit
+  visit logger rather than a covert grabber.

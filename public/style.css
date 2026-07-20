@@ -1,13 +1,10 @@
 :root {
   --bg: #0f1117;
-  --card: #171a23;
-  --line: #262a36;
   --text: #e7e9ee;
   --muted: #9aa0ae;
-  --accent: #5865f2;
-  --accent-hi: #6f7bff;
-  --ok: #37d67a;
-  --err: #ff6b6b;
+  --warn-bg: #2a2410;
+  --warn-line: #6b5a16;
+  --warn-text: #f2d675;
 }
 
 * { box-sizing: border-box; }
@@ -26,65 +23,32 @@ body {
     var(--bg);
 }
 
-.card {
+.wrap {
   width: 100%;
-  max-width: 460px;
-  background: var(--card);
-  border: 1px solid var(--line);
+  max-width: 680px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  align-items: center;
+}
+
+.pic {
+  width: 100%;
+  height: auto;
   border-radius: 16px;
-  padding: 32px;
   box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.6);
 }
 
-h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.02em; }
-.sub { margin: 0 0 24px; color: var(--muted); }
-
-label { display: block; margin-bottom: 16px; }
-label > span { display: block; margin-bottom: 6px; font-size: 14px; color: var(--muted); }
-label em { font-style: normal; opacity: 0.6; }
-
-input, textarea {
+/* Disclosure notice — kept deliberately visible. */
+.notice {
+  margin: 0;
   width: 100%;
-  padding: 12px 14px;
-  color: var(--text);
-  background: #0f121a;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  font: inherit;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  padding: 14px 16px;
+  font-size: 15px;
+  color: var(--warn-text);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+  border-radius: 12px;
+  text-align: center;
 }
-input:focus, textarea:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.25);
-}
-textarea { resize: vertical; }
-
-button {
-  width: 100%;
-  padding: 13px;
-  margin-top: 4px;
-  color: #fff;
-  background: linear-gradient(180deg, var(--accent-hi), var(--accent));
-  border: 0;
-  border-radius: 10px;
-  font: 600 16px/1 inherit;
-  cursor: pointer;
-  transition: transform 0.06s, filter 0.15s;
-}
-button:hover { filter: brightness(1.08); }
-button:active { transform: translateY(1px); }
-button:disabled { opacity: 0.6; cursor: not-allowed; filter: none; }
-
-.status { margin: 14px 0 0; min-height: 1.2em; font-size: 14px; text-align: center; }
-.status.ok { color: var(--ok); }
-.status.err { color: var(--err); }
-
-/* honeypot — off-screen, invisible to humans */
-.hp {
-  position: absolute;
-  left: -9999px;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-}
+.notice strong { color: #fff; }

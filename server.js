@@ -11,80 +11,71 @@ const PORT = process.env.PORT || 3000;
 const WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 if (!WEBHOOK_URL) {
   console.warn(
-    "[warn] DISCORD_WEBHOOK_URL is not set. Submissions will fail until you set it (see .env)."
+    "[warn] DISCORD_WEBHOOK_URL is not set. Visit logging will be skipped until you set it (see .env)."
   );
 }
 
-app.set("trust proxy", 1); // so req.ip is correct behind Render/other proxies
-app.use(express.json({ limit: "16kb" }));
-app.use(express.static(path.join(__dirname, "public")));
+app.set("trust proxy", 1); // so req.ip is the real visitor IP behind Render/proxies
 
-// ---- tiny in-memory rate limiter (no extra deps) ----
-const WINDOW_MS = 60_000; // 1 minute
-const MAX_HITS = 5; // 5 submissions per IP per minute
-const hits = new Map(); // ip -> number[] (timestamps)
-
-function rateLimited(ip) {
-  const now = Date.now();
-  const recent = (hits.get(ip) || []).filter((t) => now - t < WINDOW_MS);
-  recent.push(now);
-  hits.set(ip, recent);
-  return recent.length > MAX_HITS;
-}
-
-// occasional cleanup so the Map doesn't grow forever
+// ---- de-dupe: don't re-notify for the same IP within this window ----
+const DEDUPE_MS = 60_000;
+const lastSeen = new Map(); // ip -> timestamp
 setInterval(() => {
   const now = Date.now();
-  for (const [ip, times] of hits) {
-    const recent = times.filter((t) => now - t < WINDOW_MS);
-    if (recent.length) hits.set(ip, recent);
-    else hits.delete(ip);
+  for (const [ip, t] of lastSeen) if (now - t > DEDUPE_MS) lastSeen.delete(ip);
+}, 5 * DEDUPE_MS).unref();
+
+function cleanIp(ip) {
+  return (ip || "").replace("::ffff:", "");
+}
+
+function isLocal(ip) {
+  const c = cleanIp(ip);
+  return !c || c === "::1" || c.startsWith("127.");
+}
+
+// Approx geolocation from IP via a free, no-key, HTTPS endpoint.
+async function geoLookup(ip) {
+  if (isLocal(ip)) return null;
+  try {
+    const r = await fetch(`https://ipwho.is/${encodeURIComponent(cleanIp(ip))}`, {
+      signal: AbortSignal.timeout(4000),
+    });
+    const j = await r.json();
+    if (!j || j.success === false) return null;
+    return j;
+  } catch {
+    return null;
   }
-}, 5 * WINDOW_MS).unref();
+}
 
-const str = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+async function notifyVisit(req) {
+  if (!WEBHOOK_URL) return;
 
-app.post("/api/submit", async (req, res) => {
-  if (!WEBHOOK_URL) {
-    return res.status(500).json({ ok: false, error: "Server not configured." });
-  }
+  const ip = cleanIp(req.ip);
+  const now = Date.now();
+  if (lastSeen.get(ip) && now - lastSeen.get(ip) < DEDUPE_MS) return; // recently logged
+  lastSeen.set(ip, now);
 
-  const ip = req.ip || "unknown";
-  if (rateLimited(ip)) {
-    return res
-      .status(429)
-      .json({ ok: false, error: "Slow down — too many submissions. Try again in a minute." });
-  }
+  const ua = (req.headers["user-agent"] || "unknown").slice(0, 300);
+  const geo = await geoLookup(ip);
 
-  const body = req.body || {};
-
-  // Honeypot: real users never fill this hidden field. Bots do.
-  if (str(body.website, 100)) {
-    return res.json({ ok: true }); // pretend success, drop silently
-  }
-
-  const name = str(body.name, 100);
-  const email = str(body.email, 200);
-  const message = str(body.message, 2000);
-
-  if (!name || !message) {
-    return res
-      .status(400)
-      .json({ ok: false, error: "Name and message are required." });
-  }
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ ok: false, error: "That email looks off." });
-  }
+  const location = geo
+    ? [geo.city, geo.region, geo.country].filter(Boolean).join(", ") || "unknown"
+    : isLocal(ip)
+      ? "local / private network"
+      : "unavailable";
+  const isp = geo?.connection?.isp || geo?.connection?.org || "—";
 
   const embed = {
-    title: "📨 New submission",
+    title: "👀 New visit",
     color: 0x5865f2,
     fields: [
-      { name: "Name", value: name, inline: true },
-      { name: "Email", value: email || "—", inline: true },
-      { name: "Message", value: message },
+      { name: "IP", value: ip || "unknown", inline: true },
+      { name: "Location", value: location, inline: true },
+      { name: "ISP / Org", value: isp, inline: false },
+      { name: "User-Agent", value: ua, inline: false },
     ],
-    footer: { text: `IP ${ip}` },
     timestamp: new Date().toISOString(),
   };
 
@@ -93,28 +84,27 @@ app.post("/api/submit", async (req, res) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        username: "Site Form",
+        username: "Visit Logger",
         embeds: [embed],
-        // don't let submitted text ping anyone
         allowed_mentions: { parse: [] },
       }),
     });
-
     if (!dc.ok && dc.status !== 204) {
       console.error("[discord] non-ok:", dc.status, await dc.text());
-      return res
-        .status(502)
-        .json({ ok: false, error: "Couldn't deliver right now. Try again shortly." });
     }
-
-    return res.json({ ok: true });
   } catch (err) {
     console.error("[discord] fetch failed:", err);
-    return res
-      .status(502)
-      .json({ ok: false, error: "Couldn't deliver right now. Try again shortly." });
   }
+}
+
+// Log the visit when the page itself is loaded (not for every asset).
+// Fire-and-forget so the page still serves instantly.
+app.get("/", (req, res) => {
+  notifyVisit(req);
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
+
+app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/healthz", (_req, res) => res.json({ ok: true }));
 

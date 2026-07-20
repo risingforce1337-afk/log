@@ -3,40 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Get in touch</title>
+    <title>Gallery</title>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <main class="card">
-      <h1>Get in touch</h1>
-      <p class="sub">Drop your info below and it lands straight in our inbox.</p>
+    <main class="wrap">
+      <!-- Swap /image.svg for any image you want (drop a file in public/ and change this src) -->
+      <img class="pic" src="/image.svg" alt="Featured image" />
 
-      <form id="form" novalidate>
-        <label>
-          <span>Name</span>
-          <input name="name" type="text" maxlength="100" required autocomplete="name" />
-        </label>
-
-        <label>
-          <span>Email <em>(optional)</em></span>
-          <input name="email" type="email" maxlength="200" autocomplete="email" />
-        </label>
-
-        <label>
-          <span>Message</span>
-          <textarea name="message" rows="5" maxlength="2000" required></textarea>
-        </label>
-
-        <!-- honeypot: hidden from humans, catches bots -->
-        <div class="hp" aria-hidden="true">
-          <label>Website<input name="website" type="text" tabindex="-1" autocomplete="off" /></label>
-        </div>
-
-        <button type="submit" id="submit">Send it</button>
-        <p id="status" class="status" role="status" aria-live="polite"></p>
-      </form>
+      <p class="notice">
+        ⚠ <strong>Heads up:</strong> this page records your visit — your IP address
+        and approximate location — and notifies the site owner. By staying on this
+        page you're okay with that.
+      </p>
     </main>
-
-    <script src="/app.js"></script>
   </body>
 </html>
